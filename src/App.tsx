@@ -1,7 +1,8 @@
-import { PokemonProvider, usePokemon } from "./store";
+import { usePokemon } from "./store";
 
 const SearchBox = () => {
-  const { search, setSearch } = usePokemon();
+  const search = usePokemon((state) => state.search);
+  const setSearch = usePokemon((state) => state.setSearch);
 
   return (
     <input
@@ -18,7 +19,7 @@ const SearchBox = () => {
 }
 
 const PokemonList = () => {
-  const { pokemon } = usePokemon();
+  const pokemon = usePokemon((state) => state.pokemon);
 
   return (
     <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 mt-3">
@@ -41,12 +42,10 @@ const PokemonList = () => {
 function App() {
   return (
     <div>
-      <PokemonProvider>
-        <div className="mx-auto max-w-3xl">
-          <SearchBox />
-          <PokemonList />
-        </div>
-      </PokemonProvider>
+      <div className="mx-auto max-w-3xl">
+        <SearchBox />
+        <PokemonList />
+      </div>
     </div>
   )
 }
