@@ -1,6 +1,15 @@
-import React, { useState, useEffect, createContext, useContext, useReducer, useCallback, useMemo } from "react"
+import {
+    configureStore,
+    createSelector,
+    createSlice,
+    PayloadAction
+} from "@reduxjs/toolkit";
+import {
+    createApi,
+    fetchBaseQuery
+} from "@reduxjs/toolkit/query/react";
 
-interface Pokemon {
+export interface Pokemon {
     id: number;
     name: string;
     type: string[];
@@ -12,71 +21,56 @@ interface Pokemon {
     speed: number;
 }
 
-function usePokemonSource(): {
-    pokemon: Pokemon[];
-    search: string;
-    setSearch: (search: string) => void;
-} {
-    // const [pokemon, setPokemon] = useState<Pokemon[]>([]);
-    // const [search, setSearch] = useState("");
-    type PokemonState = {
-        pokemon: Pokemon[];
-        search: string;
-    };
-    type PokemonAction = | { type: "setPokemon"; payload: Pokemon[] } |
-    { type: "setSearch"; payload: string };
-
-    const [{ pokemon, search }, dispatch] = useReducer((state: PokemonState, action: PokemonAction) => {
-        switch (action.type) {
-            case "setPokemon":
-                return { ...state, pokemon: action.payload };
-            case "setSearch":
-                return { ...state, search: action.payload };
-        }
-    }, {
-        pokemon: [],
-        search: "",
-    })
-
-    useEffect(() => {
-        fetch("/pokemon.json")
-            .then((response) => response.json())
-            .then((data) => dispatch({
-                type: "setPokemon",
-                payload: data
-            }));
-    }, []);
-
-    const setSearch = useCallback((search: string) => {
-        dispatch({
-            type: "setSearch",
-            payload: search
+const pokemonApi = createApi({
+    reducerPath: "pokemonApi",
+    baseQuery: fetchBaseQuery({ baseUrl: "/" }),
+    endpoints: (builder) => ({
+        getPokemon: builder.query<Pokemon[], undefined>({
+            query: () => "pokemon.json"
         })
-    }, [])
+    })
+});
 
-    const filteredPokemon = useMemo(() => {
-        return pokemon
-            .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-            .slice(0, 20);
-    }, [pokemon, search]);
+export const { useGetPokemonQuery } = pokemonApi;
 
-    const sortedPokemon = useMemo(() =>
-        [...filteredPokemon].sort((a, b) => a.name.localeCompare(b.name))
-        , [filteredPokemon])
+const searchSlice = createSlice({
+    name: "search",
+    initialState: {
+        search: ""
+    },
+    reducers: {
+        setSearch: (state, action: PayloadAction<string>) => {
+            state.search = action.payload
+        }
+    }
+})
 
-    return { pokemon: sortedPokemon, search, setSearch };
-}
+export const { setSearch } = searchSlice.actions;
 
-const PokemonContext = createContext<ReturnType<typeof usePokemonSource>>({} as unknown as ReturnType<typeof usePokemonSource>);
+export const store = configureStore({
+    reducer: {
+        search: searchSlice.reducer,
+        [pokemonApi.reducerPath]: pokemonApi.reducer
+    },
+    middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware().concat(pokemonApi.middleware)
+})
 
-export function usePokemon() {
-    return useContext(PokemonContext);
-}
+export type RootState = ReturnType<typeof store.getState>;
 
-export function PokemonProvider({ children }: { children: React.ReactNode }) {
-    return (
-        <PokemonContext.Provider value={usePokemonSource()}>
-            {children}
-        </PokemonContext.Provider>
-    )
-}
+export const selectSearch = (state: RootState) => state.search.search;
+
+store.dispatch(
+    pokemonApi.endpoints.getPokemon.initiate(undefined)
+)
+
+export const selectPokemon = createSelector(
+    (state: RootState) =>
+        pokemonApi.endpoints.getPokemon.select(undefined)(state)?.data,
+    (state: RootState) => state.search.search,
+    (pokemon, search) =>
+        pokemon
+            ?.filter((poke) => poke.name.toLowerCase().includes(search.toLowerCase()))
+            .slice(0, 12)
+            .sort((a, b) => a.name.localeCompare(b.name))
+)
