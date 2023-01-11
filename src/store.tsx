@@ -1,6 +1,6 @@
-import React, { useState, useEffect, createContext, useContext, useReducer, useCallback, useMemo } from "react"
-
-interface Pokemon {
+import { atom } from "jotai"
+import { atomsWithQuery } from "jotai-tanstack-query";
+export interface Pokemon {
     id: number;
     name: string;
     type: string[];
@@ -12,71 +12,25 @@ interface Pokemon {
     speed: number;
 }
 
-function usePokemonSource(): {
-    pokemon: Pokemon[];
-    search: string;
-    setSearch: (search: string) => void;
-} {
-    // const [pokemon, setPokemon] = useState<Pokemon[]>([]);
-    // const [search, setSearch] = useState("");
-    type PokemonState = {
-        pokemon: Pokemon[];
-        search: string;
-    };
-    type PokemonAction = | { type: "setPokemon"; payload: Pokemon[] } |
-    { type: "setSearch"; payload: string };
+export const searchAtom = atom("");
 
-    const [{ pokemon, search }, dispatch] = useReducer((state: PokemonState, action: PokemonAction) => {
-        switch (action.type) {
-            case "setPokemon":
-                return { ...state, pokemon: action.payload };
-            case "setSearch":
-                return { ...state, search: action.payload };
-        }
-    }, {
-        pokemon: [],
-        search: "",
-    })
+const [allPokemon] = atomsWithQuery<Pokemon[]>(() => ({
+    queryKey: ["pokemon"],
+    queryFn: () => fetch("/pokemon.json").then((response) => response.json())
+}))
 
-    useEffect(() => {
-        fetch("/pokemon.json")
-            .then((response) => response.json())
-            .then((data) => dispatch({
-                type: "setPokemon",
-                payload: data
-            }));
-    }, []);
+export const pokemonAtom = atom((get) => {
+    const search = get(searchAtom);
+    const all = get(allPokemon);
 
-    const setSearch = useCallback((search: string) => {
-        dispatch({
-            type: "setSearch",
-            payload: search
-        })
-    }, [])
+    return all
+        .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+})
 
-    const filteredPokemon = useMemo(() => {
-        return pokemon
-            .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-            .slice(0, 20);
-    }, [pokemon, search]);
+export const sortedPokemonAtom = atom((get) => {
+    const pokemon = get(pokemonAtom);
 
-    const sortedPokemon = useMemo(() =>
-        [...filteredPokemon].sort((a, b) => a.name.localeCompare(b.name))
-        , [filteredPokemon])
-
-    return { pokemon: sortedPokemon, search, setSearch };
-}
-
-const PokemonContext = createContext<ReturnType<typeof usePokemonSource>>({} as unknown as ReturnType<typeof usePokemonSource>);
-
-export function usePokemon() {
-    return useContext(PokemonContext);
-}
-
-export function PokemonProvider({ children }: { children: React.ReactNode }) {
-    return (
-        <PokemonContext.Provider value={usePokemonSource()}>
-            {children}
-        </PokemonContext.Provider>
-    )
-}
+    return pokemon
+        .slice(0, 12)
+        .sort((a, b) => a.name.localeCompare(b.name));
+})
